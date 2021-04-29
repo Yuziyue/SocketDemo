@@ -38,6 +38,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView textView;
     private Button button1;
     private Button button2;
+    // private Button button3; todo: delete me
 
     private int socket_flag = 0;
 
