@@ -87,7 +87,7 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         button1 = (Button) findViewById(R.id.button1);
-        button1.setEnabled(true); // todo for ZiYue: delete this todo.   对于button  setEnable()能够将按钮置灰，连接和断连应该只有一个按钮是enabled状态，并且只允许点击一次
+        button1.setEnabled(true);
         button2 = (Button) findViewById(R.id.button2);
         button2.setEnabled(false);
         ipAddress = (EditText) findViewById(R.id.ip_text);
