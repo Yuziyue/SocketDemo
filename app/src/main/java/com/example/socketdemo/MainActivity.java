@@ -167,11 +167,8 @@ public class MainActivity extends AppCompatActivity {
 
                     outputStream.write("PH".getBytes("utf-8"));
 
-                    Message socket_msg = new Message();
-                    socket_msg.what = 1;
                     socket_flag = 1;
-                    socket_msg.obj = socket_flag;
-                    socket_handler.sendMessage(socket_msg);
+                    socket_handler.sendEmptyMessage(socket_flag);
 
                     Log.i("Android", "与服务器建立连接:" + socket);
 
@@ -185,6 +182,9 @@ public class MainActivity extends AppCompatActivity {
                         String responseInfo = new String(buffer);
                         Log.i("输入", responseInfo);
                         Message pic_msg = new Message();
+
+                        Log.i("输入", responseInfo);
+
                         if (responseInfo.indexOf("show_") == 0) {
                             pic_msg.what = 1;
                             pic_msg.obj = responseInfo;
@@ -272,9 +272,8 @@ public class MainActivity extends AppCompatActivity {
     Handler socket_handler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
-            super.handleMessage(msg);  // todo : Message What
-            int temp = Integer.parseInt(String.valueOf(msg.obj));
-            if(temp == 1) {
+            super.handleMessage(msg);
+            if(msg.what == 1) {
                 textView.setText("连接状态：已连接！\n"+ "LocalAddress"+socket.getLocalAddress()+"\nLocalPort/"+socket.getLocalPort());
             }else{
                 textView.setText("连接状态：未连接！");
