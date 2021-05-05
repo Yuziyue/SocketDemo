@@ -241,7 +241,7 @@ public class MainActivity extends AppCompatActivity {
                 if(!file.exists())
                 {
                     Log.i("MainActivity", "不存在这个图片" );
-                    new Thread(new Runnable(){
+                    Thread Th = new Thread(new Runnable(){
                         @Override
                         public void run() {
                             try {
@@ -252,10 +252,15 @@ public class MainActivity extends AppCompatActivity {
                                 e.printStackTrace();
                             }
                         }
-                    }).start();
+                    });
+                    Th.start();
                 }else{
+                    Bitmap bmpDefaultPic;
+                    bmpDefaultPic = BitmapFactory.decodeFile(
+                            headPath +Pic_name + ".png", null);
+                    imageView.setImageBitmap(bmpDefaultPic);
                     Log.i("MainActivity", "存在这个图片" );
-                    new Thread(new Runnable(){
+                    Thread Th = new Thread(new Runnable(){
                         @Override
                         public void run() {
                             try {
@@ -266,12 +271,14 @@ public class MainActivity extends AppCompatActivity {
                                 e.printStackTrace();
                             }
                         }
-                    }).start();
+                    });
+                    Th.start();
+                    try {
+                        Th.join();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                 }
-                Bitmap bmpDefaultPic;
-                bmpDefaultPic = BitmapFactory.decodeFile(
-                        headPath +Pic_name + ".png", null);
-                imageView.setImageBitmap(bmpDefaultPic);
                 imageView.setClickable(true);
             }
         }
