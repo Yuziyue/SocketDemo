@@ -26,7 +26,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.UnsupportedEncodingException;
 import java.net.Socket;
 import java.net.UnknownHostException;
 
@@ -43,7 +42,8 @@ public class MainActivity extends AppCompatActivity {
 
     Socket socket;
 
-    InputStream is;
+    InputStream inputStream;
+    OutputStream outputStream;
 
     private static String[] PERMISSIONS_STORAGE = {
             Manifest.permission.READ_EXTERNAL_STORAGE,
@@ -123,7 +123,7 @@ public class MainActivity extends AppCompatActivity {
                 button2.setEnabled(false);
                 try {
                     socket.close();
-                    is.close();
+                    inputStream.close();
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -162,43 +162,28 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     socket = new Socket(ip, port);
                     socket.setTcpNoDelay(true);
-                    if(isServerClose(socket) == 0){
-                        socket_flag = 1;
-                        Log.i("Android", "已经连接:" + socket);
-                        OutputStream outputStream = socket.getOutputStream();
-                        String tempStr = "PH";
-                        outputStream.write(tempStr.getBytes("utf-8"));
+                    inputStream = socket.getInputStream();
+                    outputStream = socket.getOutputStream();
 
+                    outputStream.write("PH".getBytes("utf-8"));
 
-                        //When link 192.168.4.1/4210
-//                        //Receive "hello PH"
-//                        is= socket.getInputStream();
-//                        while (is.available() == 0) ;
-//                        byte[] buffer = new byte[is.available()];
-//                        is.read(buffer);
-//                        String responseInfo = new String(buffer);
-//                        Log.i("Android", "From server" + responseInfo);
-
-
-                        //Forbid another link
-                    }else{
-                        socket_flag = 0;
-                        Log.i("Android", "无连接");
-                    }
                     Message socket_msg = new Message();
                     socket_msg.what = 1;
+                    socket_flag = 1;
                     socket_msg.obj = socket_flag;
                     socket_handler.sendMessage(socket_msg);
+
                     Log.i("Android", "与服务器建立连接:" + socket);
-                    is = socket.getInputStream();
+
                     while (true) {
-                        while (is.available() == 0) ;
+                        while (inputStream.available() == 0) ;
                         //缓冲区
-                        byte[] buffer = new byte[is.available()];
+                        byte[] buffer = new byte[inputStream.available()];
                         //读取缓冲区
-                        is.read(buffer);
+                        inputStream.read(buffer);
                         //转换为字符串
                         String responseInfo = new String(buffer);
+                        Log.i("输入", responseInfo);
                         Message pic_msg = new Message();
                         if (responseInfo.indexOf("show_") == 0) {
                             pic_msg.what = 1;
@@ -287,7 +272,7 @@ public class MainActivity extends AppCompatActivity {
     Handler socket_handler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
-            super.handleMessage(msg);
+            super.handleMessage(msg);  // todo : Message What
             int temp = Integer.parseInt(String.valueOf(msg.obj));
             if(temp == 1) {
                 textView.setText("连接状态：已连接！\n"+ "LocalAddress"+socket.getLocalAddress()+"\nLocalPort/"+socket.getLocalPort());
