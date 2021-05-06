@@ -244,6 +244,11 @@ public class MainActivity extends AppCompatActivity {
                     bmpDefaultPic = BitmapFactory.decodeFile(
                             headPath +Pic_name + ".png", null);
                     imageView.setImageBitmap(bmpDefaultPic);
+                    try {
+                        Thread.sleep(20);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                     Log.i("MainActivity", "存在这个图片" );
                     Thread Th = new Thread(new Runnable(){
                         @Override
