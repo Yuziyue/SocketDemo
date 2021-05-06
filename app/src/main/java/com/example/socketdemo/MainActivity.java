@@ -44,6 +44,7 @@ public class MainActivity extends AppCompatActivity {
 
     InputStream inputStream;
     OutputStream outputStream;
+    String send_feedback_string = null;
 
     private static String[] PERMISSIONS_STORAGE = {
             Manifest.permission.READ_EXTERNAL_STORAGE,
@@ -142,11 +143,11 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public int isServerClose(Socket socket){
-        try{
+    public int isServerClose(Socket socket) {
+        try {
             socket.sendUrgentData(0xFF);//发送1个字节的紧急数据，默认情况下，服务器端没有开启紧急数据处理，不影响正常通信
             return 0;
-        }catch(Exception se){
+        } catch (Exception se) {
             return 1;
         }
     }
@@ -190,6 +191,9 @@ public class MainActivity extends AppCompatActivity {
                             pic_msg.obj = responseInfo;
                             pic_handler.sendMessage(pic_msg);
                             Log.i("有效输入", responseInfo);
+                            while(send_feedback_string == null);  // 确保图片已完成显示
+                            outputStream.write(send_feedback_string.getBytes("utf-8"));
+                            send_feedback_string = null;
                         }
                     }
                 } catch (UnknownHostException e) {
@@ -216,55 +220,43 @@ public class MainActivity extends AppCompatActivity {
                 Log.i("MainActivity", "这是图片名：" + Pic_name);
                 String headPath = android.os.Environment.getExternalStorageDirectory()
                         + "/" + "DCIM" + "/" + "测试软件图片放置路径/";
-//                String UtfPath = null;
-//                try {
-//                    UtfPath = new String(headPath.getBytes("UTF-8"),"UTF-8");
-//                } catch (UnsupportedEncodingException e) {
-//                    e.printStackTrace();
-//                }
-                File file=new File(headPath +Pic_name + ".png");
-                if(!file.exists())
-                {
-                    Log.i("MainActivity", "不存在这个图片" );
-                    Thread Th = new Thread(new Runnable(){
-                        @Override
-                        public void run() {
-                            try {
-                                OutputStream outputStream = socket.getOutputStream();
-                                String tempStr = "to_PC_01_0";
-                                outputStream.write(tempStr.getBytes("utf-8"));
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                            }
-                        }
-                    });
-                    Th.start();
-                }else{
-                    Bitmap bmpDefaultPic;
-                    bmpDefaultPic = BitmapFactory.decodeFile(
-                            headPath +Pic_name + ".png", null);
-                    imageView.setImageBitmap(bmpDefaultPic);
-                    Log.i("MainActivity", "存在这个图片" );
-                    Thread Th = new Thread(new Runnable(){
-                        @Override
-                        public void run() {
-                            try {
-                                OutputStream outputStream = socket.getOutputStream();
-                                String tempStr = "to_PC_01_1";
-                                outputStream.write(tempStr.getBytes("utf-8"));
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                            }
-                        }
-                    });
-                    Th.start();
+
+                File file = new File(headPath + Pic_name + ".png");
+                if (!file.exists()) {
+                    Log.i("MainActivity", "不存在这个图片");
+                    send_feedback_msg_handler.sendEmptyMessage(0);
+                } else {
                     try {
-                        Th.join();
-                    } catch (InterruptedException e) {
+                        Bitmap bmpDefaultPic;
+                        bmpDefaultPic = BitmapFactory.decodeFile(
+                                headPath + Pic_name + ".png", null);
+                        imageView.setImageBitmap(bmpDefaultPic);
+                    } catch (Exception e) {
                         e.printStackTrace();
                     }
+                    Log.i("MainActivity", "存在这个图片");
+                    send_feedback_msg_handler.sendEmptyMessage(1);
                 }
                 imageView.setClickable(true);
+            }
+        }
+    };
+
+    Handler send_feedback_msg_handler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            super.handleMessage(msg);
+            try {
+                Thread.sleep(20);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            if (msg.what == 0) {
+                send_feedback_string = "to_PC_01_0";
+                Log.i("send_handler","0");
+            } else if (msg.what == 1) {
+                send_feedback_string = "to_PC_01_1";
+                Log.i("send_handler","1");
             }
         }
     };
@@ -273,9 +265,9 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void handleMessage(Message msg) {
             super.handleMessage(msg);
-            if(msg.what == 1) {
-                textView.setText("连接状态：已连接！\n"+ "LocalAddress"+socket.getLocalAddress()+"\nLocalPort/"+socket.getLocalPort());
-            }else{
+            if (msg.what == 1) {
+                textView.setText("连接状态：已连接！\n" + "LocalAddress" + socket.getLocalAddress() + "\nLocalPort/" + socket.getLocalPort());
+            } else {
                 textView.setText("连接状态：未连接！");
             }
         }
