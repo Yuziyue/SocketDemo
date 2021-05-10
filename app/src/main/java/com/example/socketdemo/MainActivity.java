@@ -6,6 +6,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -14,13 +16,22 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
+import android.view.Display;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
+
+import org.opencv.android.BaseLoaderCallback;
+import org.opencv.android.LoaderCallbackInterface;
+import org.opencv.android.OpenCVLoader;
+import org.opencv.android.Utils;
+import org.opencv.core.Mat;
+import org.opencv.core.Scalar;
 
 import java.io.File;
 import java.io.IOException;
@@ -29,16 +40,24 @@ import java.io.OutputStream;
 import java.net.Socket;
 import java.net.UnknownHostException;
 
+import static org.opencv.core.CvType.CV_8UC1;
+
 public class MainActivity extends AppCompatActivity {
 
     private EditText ipAddress;
-    private EditText sortAddress;
+    private EditText portAddress;
     private ImageView imageView;
     private TextView textView;
     private Button button1;
     private Button button2;
 
     private int socket_flag = 0;
+
+    private static int SHOW_FLAG = 1;
+    private static int GENERATE_FLAG = 2;
+
+    private int W;
+    private int H;
 
     Socket socket;
 
@@ -52,6 +71,36 @@ public class MainActivity extends AppCompatActivity {
             Manifest.permission.WRITE_EXTERNAL_STORAGE};
     //请求状态码
     private static int REQUEST_PERMISSION_CODE = 1;
+
+
+    //Load OpenCV
+    private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
+        @Override
+        public void onManagerConnected(int status) {
+            switch (status) {
+                case LoaderCallbackInterface.SUCCESS: {
+                    Log.i("test", "OpenCV loaded successfully");
+                }
+                break;
+                default: {
+                    super.onManagerConnected(status);
+                }
+                break;
+            }
+        }
+    };
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (!OpenCVLoader.initDebug()) {
+            Log.d("test", "Internal OpenCV library not found. Using OpenCV Manager for initialization");
+            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_3_0_0, this, mLoaderCallback);
+        } else {
+            Log.d("test", "OpenCV library found inside package. Using it!");
+            mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+        }
+    }
+
 
 
     //隐藏虚拟按键，并且全屏
@@ -79,6 +128,14 @@ public class MainActivity extends AppCompatActivity {
         //Fullscreen
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+
+        Display mDisplay = getWindowManager().getDefaultDisplay();
+        W = mDisplay.getWidth();
+        H = mDisplay.getHeight();
+        Log.i("Main", "Width = " + W);
+        Log.i("Main", "Height = " + H);
+
+
         hideBottomMenu();
         setContentView(R.layout.activity_main);
         //Request Permissions
@@ -92,7 +149,7 @@ public class MainActivity extends AppCompatActivity {
         button2 = (Button) findViewById(R.id.button2);
         button2.setEnabled(false);
         ipAddress = (EditText) findViewById(R.id.ip_text);
-        sortAddress = (EditText) findViewById(R.id.port_text);
+        portAddress = (EditText) findViewById(R.id.port_text);
         imageView = (ImageView) findViewById(R.id.img);
         textView = (TextView) findViewById(R.id.status);
 
@@ -109,6 +166,9 @@ public class MainActivity extends AppCompatActivity {
         button1.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                ipAddress.clearFocus();
+                portAddress.clearFocus();
+                hideKeyBoard();
                 initSocket();
                 button1.setEnabled(false);
                 button2.setEnabled(true);
@@ -132,6 +192,16 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    //关闭软键盘
+    private void hideKeyBoard() {
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm.isActive()) {
+            imm.toggleSoftInput(InputMethodManager.SHOW_IMPLICIT,
+                    InputMethodManager.HIDE_NOT_ALWAYS);
+        }
+    }
+
+
     //  需要动态申请文件读写权限
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -143,19 +213,22 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public int isServerClose(Socket socket) {
-        try {
-            socket.sendUrgentData(0xFF);//发送1个字节的紧急数据，默认情况下，服务器端没有开启紧急数据处理，不影响正常通信
-            return 0;
-        } catch (Exception se) {
-            return 1;
+
+    //String是否纯数字
+    public static boolean isNumeric(String str)
+    {
+        for (int i = 0; i < str.length(); i++) {
+            if (!Character.isDigit(str.charAt(i))){
+                return false;
+            }
         }
+        return true;
     }
 
     //socket连接
     private void initSocket() {
         String ip = ipAddress.getText().toString();
-        String temp = sortAddress.getText().toString();
+        String temp = portAddress.getText().toString();
         int port = Integer.parseInt(temp);
         new Thread(new Runnable() {
             @Override
@@ -165,14 +238,10 @@ public class MainActivity extends AppCompatActivity {
                     socket.setTcpNoDelay(true);
                     inputStream = socket.getInputStream();
                     outputStream = socket.getOutputStream();
-
                     outputStream.write("PH".getBytes("utf-8"));
-
                     socket_flag = 1;
                     socket_handler.sendEmptyMessage(socket_flag);
-
                     Log.i("Android", "与服务器建立连接:" + socket);
-
                     while (true) {
                         while (inputStream.available() == 0) ;
                         //缓冲区
@@ -183,11 +252,16 @@ public class MainActivity extends AppCompatActivity {
                         String responseInfo = new String(buffer);
                         Log.i("输入", responseInfo);
                         Message pic_msg = new Message();
-
-                        Log.i("输入", responseInfo);
-
                         if (responseInfo.indexOf("show_") == 0) {
                             pic_msg.what = 1;
+                            pic_msg.obj = responseInfo;
+                            pic_handler.sendMessage(pic_msg);
+                            Log.i("有效输入", responseInfo);
+                            while(send_feedback_string == null);  // 确保图片已完成显示
+                            outputStream.write(send_feedback_string.getBytes("utf-8"));
+                            send_feedback_string = null;
+                        }else if(responseInfo.indexOf("generate_")==0){
+                            pic_msg.what = 2;
                             pic_msg.obj = responseInfo;
                             pic_handler.sendMessage(pic_msg);
                             Log.i("有效输入", responseInfo);
@@ -211,10 +285,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     Handler pic_handler = new Handler() {
+        @SuppressLint("HandlerLeak")
         @Override
         public void handleMessage(Message msg) {
             super.handleMessage(msg);
-            if (msg.what == 1) {
+            if (msg.what == SHOW_FLAG) {
                 String imgStr = msg.obj.toString();
                 String Pic_name = imgStr.substring(5, msg.obj.toString().length());
                 Log.i("MainActivity", "这是图片名：" + Pic_name);
@@ -236,6 +311,26 @@ public class MainActivity extends AppCompatActivity {
                     }
                     Log.i("MainActivity", "存在这个图片");
                     send_feedback_msg_handler.sendEmptyMessage(1);
+                }
+                imageView.setClickable(true);
+            }else if(msg.what == GENERATE_FLAG){
+                String imgStr = msg.obj.toString();
+                String Pic_name = imgStr.substring(9, msg.obj.toString().length());
+                if (Pic_name.indexOf("grayscale_") == 0){
+                    String grayscale = Pic_name.substring(10);
+                    if(!isNumeric(grayscale)){
+                        send_feedback_msg_handler.sendEmptyMessage(0);
+                    }else{
+                        Log.i("MainActivity", "这是灰度值：" + grayscale);
+                        Mat mat = new Mat(H,W,CV_8UC1, new Scalar(Integer.parseInt(grayscale)));
+                        Bitmap bitmap = Bitmap.createBitmap(W,H,Bitmap.Config.ARGB_8888);
+                        Utils.matToBitmap(mat,bitmap);
+                        imageView.setImageBitmap(bitmap);
+                        send_feedback_msg_handler.sendEmptyMessage(1);
+                    }
+
+                }else{
+                    send_feedback_msg_handler.sendEmptyMessage(0);
                 }
                 imageView.setClickable(true);
             }
