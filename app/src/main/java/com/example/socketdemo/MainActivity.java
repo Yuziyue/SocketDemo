@@ -7,6 +7,7 @@ import androidx.core.app.ActivityCompat;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -30,8 +31,11 @@ import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.Point;
 import org.opencv.core.Scalar;
+import org.opencv.imgproc.Imgproc;
 
 import java.io.File;
 import java.io.IOException;
@@ -55,6 +59,9 @@ public class MainActivity extends AppCompatActivity {
 
     private static int SHOW_FLAG = 1;
     private static int GENERATE_FLAG = 2;
+    private static int LINE_FLAG = 3;
+    private static int DOT_FLAG = 4;
+    private static int OTHER_FLAG = 5;
 
     private int W;
     private int H;
@@ -128,14 +135,13 @@ public class MainActivity extends AppCompatActivity {
         //Fullscreen
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
-
+        //Android保持屏幕常亮，不锁屏
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON, WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         Display mDisplay = getWindowManager().getDefaultDisplay();
         W = mDisplay.getWidth();
         H = mDisplay.getHeight();
         Log.i("Main", "Width = " + W);
         Log.i("Main", "Height = " + H);
-
-
         hideBottomMenu();
         setContentView(R.layout.activity_main);
         //Request Permissions
@@ -168,7 +174,7 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View v) {
                 ipAddress.clearFocus();
                 portAddress.clearFocus();
-                hideKeyBoard();
+                hideKeyBoard(MainActivity.this);
                 initSocket();
                 button1.setEnabled(false);
                 button2.setEnabled(true);
@@ -193,11 +199,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     //关闭软键盘
-    private void hideKeyBoard() {
+    private void hideKeyBoard(Activity context) {
+        if(context == null){
+            return;
+        }
+        final View v = ((Activity) context).getWindow().peekDecorView();
         InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-        if (imm.isActive()) {
-            imm.toggleSoftInput(InputMethodManager.SHOW_IMPLICIT,
-                    InputMethodManager.HIDE_NOT_ALWAYS);
+        if (v != null && v.getWindowToken() != null) {
+            imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
         }
     }
 
@@ -223,6 +232,47 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         return true;
+    }
+
+    public boolean isLine(String str[]){
+        if(str[0].equals("orient")&&str[2].equals("width")&&str[4].equals("grayscale")&&str[6].equals("location")&&isNumeric(str[3])&&isNumeric(str[5])&&isNumeric(str[7])){
+            int width = Integer.parseInt(str[3]);
+            int grayscale = Integer.parseInt(str[5]);
+            int location = Integer.parseInt(str[7]);
+            if(str[1].equals("R")){
+                if(location<=H&&location>=0&&location+width<=H+1&&width>0&&grayscale<256&&grayscale>=0){
+                    return true;
+                }else{
+                    return false;
+                }
+            }else if(str[1].equals("C")){
+                if(location<=W&&location>=0&&location+width<=W+1&&width>0&&grayscale<256&&grayscale>=0){
+                    return true;
+                }else{
+                    return false;
+                }
+            } else{
+                return false;
+            }
+        }else{
+            return false;
+        }
+    }
+
+    public boolean isDot(String str[]){
+        if(str[0].equals("radius")&&str[2].equals("grayscale")&&str[4].equals("X")&&str[6].equals("Y")&&isNumeric(str[1])&&isNumeric(str[3])&&isNumeric(str[5])&&isNumeric(str[7])){
+            int radius = Integer.parseInt(str[1]);
+            int grayscale = Integer.parseInt(str[3]);
+            int x = Integer.parseInt(str[5]);
+            int y = Integer.parseInt(str[7]);
+            if(grayscale<256&&grayscale>=0&&x>=0&&y>=0&&radius>=0&&x-radius>=0&&x+radius<=W&&y-radius>=0&&y+radius<=H){
+                return true;
+            }else{
+                return false;
+            }
+        }else{
+            return false;
+        }
     }
 
     //socket连接
@@ -261,7 +311,42 @@ public class MainActivity extends AppCompatActivity {
                             outputStream.write(send_feedback_string.getBytes("utf-8"));
                             send_feedback_string = null;
                         }else if(responseInfo.indexOf("generate_")==0){
-                            pic_msg.what = 2;
+                            if(responseInfo.indexOf("grayscale_")==9){
+                                pic_msg.what = 2;
+                                pic_msg.obj = responseInfo;
+                                pic_handler.sendMessage(pic_msg);
+                                Log.i("有效输入", responseInfo);
+                                while(send_feedback_string == null);  // 确保图片已完成显示
+                                outputStream.write(send_feedback_string.getBytes("utf-8"));
+                                send_feedback_string = null;
+                            }else if(responseInfo.indexOf("single_line_")==9){
+                                pic_msg.what = 3;
+                                pic_msg.obj = responseInfo;
+                                pic_handler.sendMessage(pic_msg);
+                                Log.i("有效输入", responseInfo);
+                                while(send_feedback_string == null);
+                                outputStream.write(send_feedback_string.getBytes("utf-8"));
+                                send_feedback_string = null;
+                            }else if(responseInfo.indexOf("single_dot_")==9){
+                                pic_msg.what = 4;
+                                pic_msg.obj = responseInfo;
+                                pic_handler.sendMessage(pic_msg);
+                                Log.i("有效输入", responseInfo);
+                                while(send_feedback_string == null);
+                                outputStream.write(send_feedback_string.getBytes("utf-8"));
+                                send_feedback_string = null;
+                            }
+                            else{
+                                pic_msg.what = 5;
+                                pic_msg.obj = responseInfo;
+                                pic_handler.sendMessage(pic_msg);
+                                Log.i("有效输入", responseInfo);
+                                while(send_feedback_string == null);  // 确保图片已完成显示
+                                outputStream.write(send_feedback_string.getBytes("utf-8"));
+                                send_feedback_string = null;
+                            }
+                        }else{
+                            pic_msg.what = 5;
                             pic_msg.obj = responseInfo;
                             pic_handler.sendMessage(pic_msg);
                             Log.i("有效输入", responseInfo);
@@ -284,6 +369,8 @@ public class MainActivity extends AppCompatActivity {
         }).start();
     }
 
+
+
     Handler pic_handler = new Handler() {
         @SuppressLint("HandlerLeak")
         @Override
@@ -293,6 +380,7 @@ public class MainActivity extends AppCompatActivity {
                 String imgStr = msg.obj.toString();
                 String Pic_name = imgStr.substring(5, msg.obj.toString().length());
                 Log.i("MainActivity", "这是图片名：" + Pic_name);
+
                 String headPath = android.os.Environment.getExternalStorageDirectory()
                         + "/" + "DCIM" + "/" + "测试软件图片放置路径/";
 
@@ -316,22 +404,56 @@ public class MainActivity extends AppCompatActivity {
             }else if(msg.what == GENERATE_FLAG){
                 String imgStr = msg.obj.toString();
                 String Pic_name = imgStr.substring(9, msg.obj.toString().length());
-                if (Pic_name.indexOf("grayscale_") == 0){
-                    String grayscale = Pic_name.substring(10);
-                    if(!isNumeric(grayscale)){
+                String grayscale = Pic_name.substring(10);
+                if(!isNumeric(grayscale)){
+                    send_feedback_msg_handler.sendEmptyMessage(0);
+                }else{
+                    Log.i("MainActivity", "这是灰度值：" + grayscale);
+                    int pic_grayscale = Integer.parseInt(grayscale);
+                    if(pic_grayscale > 255 || pic_grayscale < 0){
                         send_feedback_msg_handler.sendEmptyMessage(0);
                     }else{
-                        Log.i("MainActivity", "这是灰度值：" + grayscale);
-                        Mat mat = new Mat(H,W,CV_8UC1, new Scalar(Integer.parseInt(grayscale)));
+                        Mat mat = new Mat(H,W,CV_8UC1, new Scalar(pic_grayscale));
                         Bitmap bitmap = Bitmap.createBitmap(W,H,Bitmap.Config.ARGB_8888);
                         Utils.matToBitmap(mat,bitmap);
                         imageView.setImageBitmap(bitmap);
                         send_feedback_msg_handler.sendEmptyMessage(1);
                     }
-
-                }else{
+                }
+                imageView.setClickable(true);
+            }else if(msg.what == LINE_FLAG){
+                String Single_line = msg.obj.toString().substring(21);
+                String str[] = Single_line.split("_");
+                if(isLine(str)){
+                    Mat mat = Mat.zeros(H,W, CvType.CV_8UC1);
+                    if(str[1].equals("R")){
+                        Imgproc.line(mat,new Point(0,Integer.parseInt(str[7])),new Point(W,Integer.parseInt(str[7])),new Scalar(Integer.parseInt(str[5])),Integer.parseInt(str[3]));
+                    }else if(str[1].equals("C")){
+                        Imgproc.line(mat,new Point(Integer.parseInt(str[7]),0),new Point(Integer.parseInt(str[7]),H),new Scalar(Integer.parseInt(str[5])),Integer.parseInt(str[3]));
+                    }
+                    Bitmap bitmap = Bitmap.createBitmap(W,H,Bitmap.Config.ARGB_8888);
+                    Utils.matToBitmap(mat,bitmap);
+                    imageView.setImageBitmap(bitmap);
+                    send_feedback_msg_handler.sendEmptyMessage(1);
+                }else {
                     send_feedback_msg_handler.sendEmptyMessage(0);
                 }
+                imageView.setClickable(true);
+            }else if(msg.what == DOT_FLAG){
+                String str[] = msg.obj.toString().substring(20).split("_");
+                if(isDot(str)){
+                    Mat mat = Mat.zeros(H,W, CvType.CV_8UC1);
+                    Imgproc.circle(mat,new Point(Integer.parseInt(str[5]),Integer.parseInt(str[7])),Integer.parseInt(str[1]),new Scalar(Integer.parseInt(str[3])),-1);
+                    Bitmap bitmap = Bitmap.createBitmap(W,H,Bitmap.Config.ARGB_8888);
+                    Utils.matToBitmap(mat,bitmap);
+                    imageView.setImageBitmap(bitmap);
+                    send_feedback_msg_handler.sendEmptyMessage(1);
+                }else {
+                    send_feedback_msg_handler.sendEmptyMessage(0);
+                }
+                imageView.setClickable(true);
+            }else if(msg.what == OTHER_FLAG){
+                send_feedback_msg_handler.sendEmptyMessage(0);
                 imageView.setClickable(true);
             }
         }
@@ -369,3 +491,6 @@ public class MainActivity extends AppCompatActivity {
     };
 
 }
+
+
+
