@@ -14,6 +14,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
@@ -26,7 +27,10 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
@@ -38,9 +42,11 @@ import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.RandomAccessFile;
 import java.net.Socket;
 import java.net.UnknownHostException;
 
@@ -61,7 +67,10 @@ public class MainActivity extends AppCompatActivity {
     private static int GENERATE_FLAG = 2;
     private static int LINE_FLAG = 3;
     private static int DOT_FLAG = 4;
-    private static int OTHER_FLAG = 5;
+    private static int JSON_INSERT_FLAG = 5;
+    private static int JSON_SAVE_FLAG = 6;
+    private static int JSON_GENERATE_FLAG = 7;
+    private static int OTHER_FLAG = 8;
 
     private int W;
     private int H;
@@ -71,6 +80,9 @@ public class MainActivity extends AppCompatActivity {
     InputStream inputStream;
     OutputStream outputStream;
     String send_feedback_string = null;
+
+    JSONObject object = new JSONObject();
+
 
     private static String[] PERMISSIONS_STORAGE = {
             Manifest.permission.READ_EXTERNAL_STORAGE,
@@ -158,6 +170,7 @@ public class MainActivity extends AppCompatActivity {
         portAddress = (EditText) findViewById(R.id.port_text);
         imageView = (ImageView) findViewById(R.id.img);
         textView = (TextView) findViewById(R.id.status);
+
 
         imageView.setClickable(false);
         imageView.setOnClickListener(new View.OnClickListener() {
@@ -275,6 +288,98 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // 将字符串写入到json文件中
+    public void writeTxtToFile(String strcontent, String filePath, String fileName) {
+        //生成文件夹之后，再生成文件
+        makeFilePath(filePath, fileName);
+        String strFilePath = filePath + fileName;
+        // 每次写入时，都换行写
+        String strContent = strcontent + "\r\n";
+        try {
+            File file = new File(strFilePath);
+            if (!file.exists()) {
+                file.getParentFile().mkdirs();
+                file.createNewFile();
+                Toast.makeText(this, "Create the file:"+strFilePath, Toast.LENGTH_SHORT).show();
+            }
+            RandomAccessFile raf = new RandomAccessFile(file, "rwd");
+            raf.seek(file.length());
+            raf.write(strContent.getBytes());
+            raf.close();
+        } catch (Exception e) {
+            Log.e("TestFile", "Error on write File:" + e);
+        }
+    }
+
+
+    public Bitmap generateJson(String jsonStr){
+        Mat mat = Mat.zeros(H,W, CvType.CV_8UC1);
+        Bitmap bitmap = Bitmap.createBitmap(W,H,Bitmap.Config.ARGB_8888);
+        String result=null;
+        try {
+            File f=new File(Environment.getExternalStorageDirectory().getPath()+"/DCIM/json/"+jsonStr+".json");
+            int length=(int)f.length();
+            byte[] buff=new byte[length];
+            FileInputStream fin=new FileInputStream(f);
+            fin.read(buff);
+            fin.close();
+            result=new String(buff,"UTF-8");
+        }catch (Exception e){
+            e.printStackTrace();
+            return null;
+        }
+
+        try {
+            JSONObject jsonObject = new JSONObject(result);
+            int grayscale = Integer.parseInt(jsonObject.getString("grayscale"));
+            int radius = Integer.parseInt(jsonObject.getString("radius"));
+            int num = Integer.parseInt(jsonObject.getString("num"));
+            for(int i=1;i<=num;i++){
+                String No = String.format("%03d",i);
+                int temp = Integer.parseInt(jsonObject.getString(No));
+                int x = temp/10000;
+                int y = temp%10000;
+                Imgproc.circle(mat,new Point(x,y),radius,new Scalar(grayscale),-1);
+            }
+            Utils.matToBitmap(mat,bitmap);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        return bitmap;
+    }
+
+
+
+    // 生成文件
+    public File makeFilePath(String filePath, String fileName) {
+        File file = null;
+        makeRootDirectory(filePath);
+        try {
+            file = new File(filePath + fileName);
+            if (!file.exists()) {
+                file.createNewFile();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return file;
+    }
+
+
+    // 生成文件夹
+    public static void makeRootDirectory(String filePath) {
+        File file = null;
+        try {
+            file = new File(filePath);
+            if (!file.exists()) {
+                file.mkdir();
+            }
+        } catch (Exception e) {
+            Log.i("error:", e + "");
+        }
+    }
+
     //socket连接
     private void initSocket() {
         String ip = ipAddress.getText().toString();
@@ -302,8 +407,9 @@ public class MainActivity extends AppCompatActivity {
                         String responseInfo = new String(buffer);
                         Log.i("输入", responseInfo);
                         Message pic_msg = new Message();
+                        Message json_msg = new Message();
                         if (responseInfo.indexOf("show_") == 0) {
-                            pic_msg.what = 1;
+                            pic_msg.what = SHOW_FLAG;
                             pic_msg.obj = responseInfo;
                             pic_handler.sendMessage(pic_msg);
                             Log.i("有效输入", responseInfo);
@@ -312,7 +418,7 @@ public class MainActivity extends AppCompatActivity {
                             send_feedback_string = null;
                         }else if(responseInfo.indexOf("generate_")==0){
                             if(responseInfo.indexOf("grayscale_")==9){
-                                pic_msg.what = 2;
+                                pic_msg.what = GENERATE_FLAG;
                                 pic_msg.obj = responseInfo;
                                 pic_handler.sendMessage(pic_msg);
                                 Log.i("有效输入", responseInfo);
@@ -320,7 +426,15 @@ public class MainActivity extends AppCompatActivity {
                                 outputStream.write(send_feedback_string.getBytes("utf-8"));
                                 send_feedback_string = null;
                             }else if(responseInfo.indexOf("single_line_")==9){
-                                pic_msg.what = 3;
+                                pic_msg.what = LINE_FLAG;
+                                pic_msg.obj = responseInfo;
+                                pic_handler.sendMessage(pic_msg);
+                                Log.i("有效输入", responseInfo);
+                                while(send_feedback_string == null);
+                                outputStream.write(send_feedback_string.getBytes("utf-8"));
+                                send_feedback_string = null;
+                            }else if(responseInfo.indexOf("Json_")==9){
+                                pic_msg.what = JSON_GENERATE_FLAG;
                                 pic_msg.obj = responseInfo;
                                 pic_handler.sendMessage(pic_msg);
                                 Log.i("有效输入", responseInfo);
@@ -328,16 +442,15 @@ public class MainActivity extends AppCompatActivity {
                                 outputStream.write(send_feedback_string.getBytes("utf-8"));
                                 send_feedback_string = null;
                             }else if(responseInfo.indexOf("single_dot_")==9){
-                                pic_msg.what = 4;
+                                pic_msg.what = DOT_FLAG;
                                 pic_msg.obj = responseInfo;
                                 pic_handler.sendMessage(pic_msg);
                                 Log.i("有效输入", responseInfo);
                                 while(send_feedback_string == null);
                                 outputStream.write(send_feedback_string.getBytes("utf-8"));
                                 send_feedback_string = null;
-                            }
-                            else{
-                                pic_msg.what = 5;
+                            } else{
+                                pic_msg.what = OTHER_FLAG;
                                 pic_msg.obj = responseInfo;
                                 pic_handler.sendMessage(pic_msg);
                                 Log.i("有效输入", responseInfo);
@@ -345,8 +458,34 @@ public class MainActivity extends AppCompatActivity {
                                 outputStream.write(send_feedback_string.getBytes("utf-8"));
                                 send_feedback_string = null;
                             }
-                        }else{
-                            pic_msg.what = 5;
+                        }else if(responseInfo.indexOf("Json_") == 0){
+                            if(responseInfo.indexOf("insert_")==5){
+                                json_msg.what = JSON_INSERT_FLAG;
+                                json_msg.obj = responseInfo;
+                                json_handler.sendMessage(json_msg);
+                                Log.i("有效输入",responseInfo);
+                                while(send_feedback_string == null);
+                                outputStream.write(send_feedback_string.getBytes("utf-8"));
+                                send_feedback_string = null;
+                            }else if(responseInfo.indexOf("save_")==5){
+                                json_msg.what = JSON_SAVE_FLAG;
+                                json_msg.obj = responseInfo;
+                                json_handler.sendMessage(json_msg);
+                                Log.i("有效输入",responseInfo);
+                                while(send_feedback_string == null);
+                                outputStream.write(send_feedback_string.getBytes("utf-8"));
+                                send_feedback_string = null;
+                            }else{
+                                json_msg.what = OTHER_FLAG;
+                                json_msg.obj = responseInfo;
+                                json_handler.sendMessage(json_msg);
+                                Log.i("有效输入", responseInfo);
+                                while(send_feedback_string == null);
+                                outputStream.write(send_feedback_string.getBytes("utf-8"));
+                                send_feedback_string = null;
+                            }
+                        } else{
+                            pic_msg.what = OTHER_FLAG;
                             pic_msg.obj = responseInfo;
                             pic_handler.sendMessage(pic_msg);
                             Log.i("有效输入", responseInfo);
@@ -369,7 +508,37 @@ public class MainActivity extends AppCompatActivity {
         }).start();
     }
 
-
+    Handler json_handler = new Handler(){
+        @SuppressLint("HandlerLeak")
+        public void handleMessage(Message msg) {
+            super.handleMessage(msg);
+            if (msg.what == JSON_INSERT_FLAG) {
+                String jsonString = msg.obj.toString().substring(12);
+                Log.i("Json处理","这是输入：" + jsonString);
+                String str[] = jsonString.split("_");
+                if(str[0].equals("key")  && str[2].equals("value")){
+                    try {
+                        object.put(str[1],str[3]);
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                    Log.i("这是生成的object:",object.toString());
+                    send_feedback_msg_handler.sendEmptyMessage(1);
+                }else{
+                    send_feedback_msg_handler.sendEmptyMessage(0);
+                }
+            }else if(msg.what == JSON_SAVE_FLAG){
+                String filePath = Environment.getExternalStorageDirectory().getPath() + "/DCIM/json/";
+                String fileName = msg.obj.toString().substring(10)+".json";
+                Log.i("Json文件名：", fileName);
+                writeTxtToFile(object.toString()
+                        , filePath, fileName);
+                send_feedback_msg_handler.sendEmptyMessage(1);
+            }else if(msg.what == OTHER_FLAG){
+                send_feedback_msg_handler.sendEmptyMessage(0);
+            }
+        }
+    };
 
     Handler pic_handler = new Handler() {
         @SuppressLint("HandlerLeak")
@@ -449,6 +618,16 @@ public class MainActivity extends AppCompatActivity {
                     imageView.setImageBitmap(bitmap);
                     send_feedback_msg_handler.sendEmptyMessage(1);
                 }else {
+                    send_feedback_msg_handler.sendEmptyMessage(0);
+                }
+                imageView.setClickable(true);
+            }else if(msg.what == JSON_GENERATE_FLAG){
+                String jsonFileName = msg.obj.toString().substring(14);
+                Bitmap bitmap = generateJson(jsonFileName);
+                imageView.setImageBitmap(bitmap);
+                if(bitmap != null){
+                    send_feedback_msg_handler.sendEmptyMessage(1);
+                }else{
                     send_feedback_msg_handler.sendEmptyMessage(0);
                 }
                 imageView.setClickable(true);
