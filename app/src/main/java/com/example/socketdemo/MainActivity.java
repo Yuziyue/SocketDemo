@@ -12,6 +12,7 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -616,6 +617,14 @@ public class MainActivity extends AppCompatActivity {
                     Bitmap bitmap = Bitmap.createBitmap(W,H,Bitmap.Config.ARGB_8888);
                     Utils.matToBitmap(mat,bitmap);
                     imageView.setImageBitmap(bitmap);
+
+                    int color = bitmap.getPixel(Integer.parseInt(str[5]),Integer.parseInt(str[7]));
+                    int r = Color.red(color);
+                    int g = Color.green(color);
+                    int b = Color.blue(color);
+                    int a = Color.alpha(color);
+                    Log.i("bitmap::","r："+r+" g: "+g+" b:"+b+" a:"+a);
+
                     send_feedback_msg_handler.sendEmptyMessage(1);
                 }else {
                     send_feedback_msg_handler.sendEmptyMessage(0);
