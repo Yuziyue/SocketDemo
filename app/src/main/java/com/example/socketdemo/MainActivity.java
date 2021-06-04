@@ -301,7 +301,7 @@ public class MainActivity extends AppCompatActivity {
             if (!file.exists()) {
                 file.getParentFile().mkdirs();
                 file.createNewFile();
-                Toast.makeText(this, "Create the file:"+strFilePath, Toast.LENGTH_SHORT).show();
+                //Toast.makeText(this, "Create the file:"+strFilePath, Toast.LENGTH_SHORT).show();
             }
             RandomAccessFile raf = new RandomAccessFile(file, "rwd");
             raf.seek(file.length());
@@ -381,6 +381,8 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+
+
     //socket连接
     private void initSocket() {
         String ip = ipAddress.getText().toString();
@@ -417,7 +419,9 @@ public class MainActivity extends AppCompatActivity {
                             while(send_feedback_string == null);  // 确保图片已完成显示
                             outputStream.write(send_feedback_string.getBytes("utf-8"));
                             send_feedback_string = null;
-                        }else if(responseInfo.indexOf("generate_")==0){
+                            continue;
+                        }
+                        if(responseInfo.indexOf("generate_")==0){
                             if(responseInfo.indexOf("grayscale_")==9){
                                 pic_msg.what = GENERATE_FLAG;
                                 pic_msg.obj = responseInfo;
@@ -426,7 +430,9 @@ public class MainActivity extends AppCompatActivity {
                                 while(send_feedback_string == null);  // 确保图片已完成显示
                                 outputStream.write(send_feedback_string.getBytes("utf-8"));
                                 send_feedback_string = null;
-                            }else if(responseInfo.indexOf("single_line_")==9){
+                                continue;
+                            }
+                            if(responseInfo.indexOf("single_line_")==9){
                                 pic_msg.what = LINE_FLAG;
                                 pic_msg.obj = responseInfo;
                                 pic_handler.sendMessage(pic_msg);
@@ -434,7 +440,9 @@ public class MainActivity extends AppCompatActivity {
                                 while(send_feedback_string == null);
                                 outputStream.write(send_feedback_string.getBytes("utf-8"));
                                 send_feedback_string = null;
-                            }else if(responseInfo.indexOf("Json_")==9){
+                                continue;
+                            }
+                            if(responseInfo.indexOf("Json_")==9){
                                 pic_msg.what = JSON_GENERATE_FLAG;
                                 pic_msg.obj = responseInfo;
                                 pic_handler.sendMessage(pic_msg);
@@ -442,7 +450,9 @@ public class MainActivity extends AppCompatActivity {
                                 while(send_feedback_string == null);
                                 outputStream.write(send_feedback_string.getBytes("utf-8"));
                                 send_feedback_string = null;
-                            }else if(responseInfo.indexOf("single_dot_")==9){
+                                continue;
+                            }
+                            if(responseInfo.indexOf("single_dot_")==9){
                                 pic_msg.what = DOT_FLAG;
                                 pic_msg.obj = responseInfo;
                                 pic_handler.sendMessage(pic_msg);
@@ -450,16 +460,10 @@ public class MainActivity extends AppCompatActivity {
                                 while(send_feedback_string == null);
                                 outputStream.write(send_feedback_string.getBytes("utf-8"));
                                 send_feedback_string = null;
-                            } else{
-                                pic_msg.what = OTHER_FLAG;
-                                pic_msg.obj = responseInfo;
-                                pic_handler.sendMessage(pic_msg);
-                                Log.i("有效输入", responseInfo);
-                                while(send_feedback_string == null);  // 确保图片已完成显示
-                                outputStream.write(send_feedback_string.getBytes("utf-8"));
-                                send_feedback_string = null;
+                                continue;
                             }
-                        }else if(responseInfo.indexOf("Json_") == 0){
+                        }
+                        if(responseInfo.indexOf("Json_") == 0){
                             if(responseInfo.indexOf("insert_")==5){
                                 json_msg.what = JSON_INSERT_FLAG;
                                 json_msg.obj = responseInfo;
@@ -468,7 +472,9 @@ public class MainActivity extends AppCompatActivity {
                                 while(send_feedback_string == null);
                                 outputStream.write(send_feedback_string.getBytes("utf-8"));
                                 send_feedback_string = null;
-                            }else if(responseInfo.indexOf("save_")==5){
+                                continue;
+                            }
+                            if(responseInfo.indexOf("save_")==5){
                                 json_msg.what = JSON_SAVE_FLAG;
                                 json_msg.obj = responseInfo;
                                 json_handler.sendMessage(json_msg);
@@ -476,24 +482,17 @@ public class MainActivity extends AppCompatActivity {
                                 while(send_feedback_string == null);
                                 outputStream.write(send_feedback_string.getBytes("utf-8"));
                                 send_feedback_string = null;
-                            }else{
-                                json_msg.what = OTHER_FLAG;
-                                json_msg.obj = responseInfo;
-                                json_handler.sendMessage(json_msg);
-                                Log.i("有效输入", responseInfo);
-                                while(send_feedback_string == null);
-                                outputStream.write(send_feedback_string.getBytes("utf-8"));
-                                send_feedback_string = null;
+                                continue;
                             }
-                        } else{
-                            pic_msg.what = OTHER_FLAG;
-                            pic_msg.obj = responseInfo;
-                            pic_handler.sendMessage(pic_msg);
-                            Log.i("有效输入", responseInfo);
-                            while(send_feedback_string == null);  // 确保图片已完成显示
-                            outputStream.write(send_feedback_string.getBytes("utf-8"));
-                            send_feedback_string = null;
                         }
+                        pic_msg.what = OTHER_FLAG;
+                        pic_msg.obj = responseInfo;
+                        pic_handler.sendMessage(pic_msg);
+                        Log.i("有效输入", responseInfo);
+                        while(send_feedback_string == null);  // 确保图片已完成显示
+                        outputStream.write(send_feedback_string.getBytes("utf-8"));
+                        send_feedback_string = null;
+                        continue;
                     }
                 } catch (UnknownHostException e) {
                     Log.e("Android", "连接错误");
@@ -534,6 +533,7 @@ public class MainActivity extends AppCompatActivity {
                 Log.i("Json文件名：", fileName);
                 writeTxtToFile(object.toString()
                         , filePath, fileName);
+                object = new JSONObject();
                 send_feedback_msg_handler.sendEmptyMessage(1);
             }else if(msg.what == OTHER_FLAG){
                 send_feedback_msg_handler.sendEmptyMessage(0);
@@ -617,14 +617,6 @@ public class MainActivity extends AppCompatActivity {
                     Bitmap bitmap = Bitmap.createBitmap(W,H,Bitmap.Config.ARGB_8888);
                     Utils.matToBitmap(mat,bitmap);
                     imageView.setImageBitmap(bitmap);
-
-                    int color = bitmap.getPixel(Integer.parseInt(str[5]),Integer.parseInt(str[7]));
-                    int r = Color.red(color);
-                    int g = Color.green(color);
-                    int b = Color.blue(color);
-                    int a = Color.alpha(color);
-                    Log.i("bitmap::","r："+r+" g: "+g+" b:"+b+" a:"+a);
-
                     send_feedback_msg_handler.sendEmptyMessage(1);
                 }else {
                     send_feedback_msg_handler.sendEmptyMessage(0);
