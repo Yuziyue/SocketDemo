@@ -13,6 +13,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -40,6 +41,7 @@ import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.core.Scalar;
+import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 
 import java.io.File;
@@ -50,6 +52,8 @@ import java.io.OutputStream;
 import java.io.RandomAccessFile;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 import static org.opencv.core.CvType.CV_8UC1;
 
@@ -68,10 +72,12 @@ public class MainActivity extends AppCompatActivity {
     private static int GENERATE_FLAG = 2;
     private static int LINE_FLAG = 3;
     private static int DOT_FLAG = 4;
-    private static int JSON_INSERT_FLAG = 5;
-    private static int JSON_SAVE_FLAG = 6;
-    private static int JSON_GENERATE_FLAG = 7;
-    private static int OTHER_FLAG = 8;
+    private static int PNG_DOT_FLAG = 5;
+    private static int JSON_INSERT_FLAG = 6;
+    private static int JSON_SAVE_FLAG = 7;
+    private static int JSON_GENERATE_FLAG = 8;
+    private static int JSON_REMOVE = 9;
+    private static int OTHER_FLAG = 10;
 
     private int W;
     private int H;
@@ -462,6 +468,16 @@ public class MainActivity extends AppCompatActivity {
                                 send_feedback_string = null;
                                 continue;
                             }
+                            if(responseInfo.indexOf("png_single_dot_")==9){
+                                pic_msg.what = PNG_DOT_FLAG;
+                                pic_msg.obj = responseInfo;
+                                pic_handler.sendMessage(pic_msg);
+                                Log.i("有效输入", responseInfo);
+                                while(send_feedback_string == null);
+                                outputStream.write(send_feedback_string.getBytes("utf-8"));
+                                send_feedback_string = null;
+                                continue;
+                            }
                         }
                         if(responseInfo.indexOf("Json_") == 0){
                             if(responseInfo.indexOf("insert_")==5){
@@ -479,6 +495,15 @@ public class MainActivity extends AppCompatActivity {
                                 json_msg.obj = responseInfo;
                                 json_handler.sendMessage(json_msg);
                                 Log.i("有效输入",responseInfo);
+                                while(send_feedback_string == null);
+                                outputStream.write(send_feedback_string.getBytes("utf-8"));
+                                send_feedback_string = null;
+                                continue;
+                            }
+                            if(responseInfo.indexOf("remove")==5){
+                                json_msg.what = JSON_REMOVE;
+                                json_msg.obj = responseInfo;
+                                json_handler.sendMessage(json_msg);
                                 while(send_feedback_string == null);
                                 outputStream.write(send_feedback_string.getBytes("utf-8"));
                                 send_feedback_string = null;
@@ -533,6 +558,8 @@ public class MainActivity extends AppCompatActivity {
                 Log.i("Json文件名：", fileName);
                 writeTxtToFile(object.toString()
                         , filePath, fileName);
+                send_feedback_msg_handler.sendEmptyMessage(1);
+            }else if(msg.what == JSON_REMOVE){
                 object = new JSONObject();
                 send_feedback_msg_handler.sendEmptyMessage(1);
             }else if(msg.what == OTHER_FLAG){
@@ -617,6 +644,31 @@ public class MainActivity extends AppCompatActivity {
                     Bitmap bitmap = Bitmap.createBitmap(W,H,Bitmap.Config.ARGB_8888);
                     Utils.matToBitmap(mat,bitmap);
                     imageView.setImageBitmap(bitmap);
+                    send_feedback_msg_handler.sendEmptyMessage(1);
+                }else {
+                    send_feedback_msg_handler.sendEmptyMessage(0);
+                }
+                imageView.setClickable(true);
+            }else if(msg.what == PNG_DOT_FLAG){
+                String str[] = msg.obj.toString().substring(24).split("_");
+                Log.i("读取图片","");
+                if(isDot(str)){
+                    Mat mat = Mat.zeros(H,W, CvType.CV_8UC1);
+                    Imgproc.circle(mat,new Point(Integer.parseInt(str[5]),Integer.parseInt(str[7])),Integer.parseInt(str[1]),new Scalar(Integer.parseInt(str[3])),-1);
+                    Mat dst = new Mat();
+                    Imgproc.cvtColor(mat,dst,Imgproc.COLOR_GRAY2RGBA);
+                    File fileDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),"OpenCV");
+                    if(!fileDir.exists()){
+                        fileDir.mkdirs();
+                    }
+                    SimpleDateFormat sf = new SimpleDateFormat("yyyyMMddhhmmss");
+                    String name = "dot_"+sf.format(new Date())+".png";
+                   // String name = "dot.png";
+                    File tempFile = new File(fileDir.getAbsoluteFile() + File.separator,name);
+                    Imgcodecs.imwrite(tempFile.getAbsolutePath(),dst);
+                    String headPath = android.os.Environment.getExternalStorageDirectory()
+                            + "/" + "DCIM" + "/" + "OpenCV/";
+                    imageView.setImageURI(Uri.fromFile(new File(headPath+name)));
                     send_feedback_msg_handler.sendEmptyMessage(1);
                 }else {
                     send_feedback_msg_handler.sendEmptyMessage(0);
